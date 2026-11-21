@@ -1,0 +1,39 @@
+CHIP Memory {
+    IN in[16],
+       load,
+       address[15];
+
+    OUT out[16];
+
+    PARTS:
+
+    // Address decoding for writes
+    DMux(in=load, sel=address[14], a=loadRAM, b=loadRest);
+    DMux(in=loadRest, sel=address[13], a=loadScreen, b=loadKeyboard);
+
+    // RAM16K (0 - 16383)
+    RAM16K(in=in, load=loadRAM, address=address[0..13], out=ramOut);
+
+    // Screen (16384 - 24575)
+    Screen(in=in, load=loadScreen, address=address[0..12], out=screenOut);
+
+    // Keyboard (24576 only)
+    Keyboard(out=keyboardOut);
+
+    // isHigh = address >= 24576 (both top bits set)
+    And(a=address[14], b=address[13], out=isHigh);
+
+    // isKbd = address is exactly 24576 (low 13 bits all zero)
+    Or8Way(in=address[0..7], out=lowA);
+    Or8Way(in[0..4]=address[8..12], in[5..7]=false, out=lowB);
+    Or(a=lowA, b=lowB, out=lowAny);
+    Not(in=lowAny, out=lowZero);
+    And(a=isHigh, b=lowZero, out=isKbd);
+
+    // Keyboard value, or 0 for any invalid address above 24576
+    Mux16(a=false, b=keyboardOut, sel=isKbd, out=kbdOrZero);
+
+    // Output selection
+    Mux16(a=ramOut, b=screenOut, sel=address[14], out=ramScreenOut);
+    Mux16(a=ramScreenOut, b=kbdOrZero, sel=isHigh, out=out);
+}
